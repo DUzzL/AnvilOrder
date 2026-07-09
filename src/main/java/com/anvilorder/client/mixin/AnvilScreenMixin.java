@@ -3,19 +3,17 @@ package com.anvilorder.client.mixin;
 import com.anvilorder.client.screen.AnvilGuidePanel;
 import com.anvilorder.client.screen.EnchantmentSelectScreen;
 import com.anvilorder.client.screen.ResultHolder;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.inventory.AnvilScreen;
-import net.minecraft.client.gui.screens.inventory.ItemCombinerScreen;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.AnvilMenu;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.ingame.AnvilScreen;
+import net.minecraft.client.gui.screen.ingame.ForgingScreen;
+import net.minecraft.client.gui.tooltip.Tooltip;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.ItemStack;
+import net.minecraft.screen.AnvilScreenHandler;
+import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -27,121 +25,110 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Mixin to add "Plan enchantment order" button and results panel to the anvil GUI.
  */
 @Mixin(AnvilScreen.class)
-public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> {
+public abstract class AnvilScreenMixin extends ForgingScreen<AnvilScreenHandler> {
 
-    // AnvilScreen in MC 26.2 takes 3 args; ItemCombinerScreen wants 4.
-    // Supply the well-known anvil background texture identifier.
-    private static final Identifier ANVIL_LOCATION = Identifier.withDefaultNamespace("textures/gui/container/anvil.png");
+    private static final Identifier ANVIL_LOCATION = Identifier.ofVanilla("textures/gui/container/anvil.png");
 
-    protected AnvilScreenMixin(AnvilMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, ANVIL_LOCATION);
+    protected AnvilScreenMixin(AnvilScreenHandler handler, PlayerInventory inventory, Text title) {
+        super(handler, inventory, title, ANVIL_LOCATION);
     }
 
     @Unique
-    private Button planButton;
+    private ButtonWidget planButton;
 
     @Unique
     private final AnvilGuidePanel guidePanel = new AnvilGuidePanel();
 
     @Shadow
-    private EditBox name;
+    private TextFieldWidget nameField;
 
     /** Position the anvil GUI in the left half and panel in the right half. */
     @Unique
     private void applySplitLayout() {
-        if (this.minecraft == null) return;
+        if (this.client == null) return;
         int screenW = this.width;
         int halfW = screenW / 2;
         // Center anvil+inventory in the left half
-        this.leftPos = (halfW - this.imageWidth) / 2;
+        this.x = (halfW - this.backgroundWidth) / 2;
 
         // Panel fills the right half
         guidePanel.x = halfW + 6;
-        guidePanel.y = this.topPos;
-        guidePanel.height = this.imageHeight;
+        guidePanel.y = this.y;
+        guidePanel.height = this.backgroundHeight;
         guidePanel.width = screenW - halfW - 12;
 
-        // Reposition the name EditBox to match the new leftPos
-        if (name != null) {
-            name.setPosition(this.leftPos + 62, this.topPos + 24);
+        // Reposition the name text field to match the new x
+        if (nameField != null) {
+            nameField.setPosition(this.x + 62, this.y + 24);
         }
     }
 
-    @Inject(method = "subInit", at = @At("TAIL"))
-    private void anvilorder$subInit(CallbackInfo ci) {
+    @Inject(method = "setup", at = @At("TAIL"))
+    private void anvilorder$setup(CallbackInfo ci) {
         applySplitLayout();
 
         // Place plan button right next to the left anvil input slot (slot 0 at x=27,y=47)
-        int buttonX = this.leftPos + 50;
-        int buttonY = this.topPos + 47;
+        int buttonX = this.x + 50;
+        int buttonY = this.y + 47;
 
-        this.planButton = Button.builder(
-                Component.literal("\u2692"),
+        this.planButton = ButtonWidget.builder(
+                Text.literal("\u2692"),
                 (btn) -> {
                     // Anvil: target always in left slot (0), sacrifice in right slot (1)
-                    ItemStack target = this.menu.getSlot(0).getItem();
-                    if (!target.isEmpty() && this.minecraft != null) {
+                    ItemStack target = this.handler.getSlot(0).getStack();
+                    if (!target.isEmpty() && this.client != null) {
                         // Save the current anvil name before leaving the screen
-                        if (name != null) {
-                            ResultHolder.savedAnvilName = name.getValue();
+                        if (nameField != null) {
+                            ResultHolder.savedAnvilName = nameField.getText();
                         }
-                        this.minecraft.setScreenAndShow(new EnchantmentSelectScreen(
-                                Component.translatable("screen.anvilorder.enchant_select"),
+                        this.client.setScreen(new EnchantmentSelectScreen(
+                                Text.translatable("screen.anvilorder.enchant_select"),
                                 target.copy(),
                                 this
                         ));
                     }
                 }
-        ).bounds(buttonX, buttonY, 20, 18).build();
+        ).dimensions(buttonX, buttonY, 20, 18).build();
 
         updateButtonState();
-        this.addRenderableWidget(this.planButton);
+        this.addDrawableChild(this.planButton);
     }
 
     // AnvilScreen overrides resize() — inject here to reposition on window resize
     @Inject(method = "resize", at = @At("TAIL"))
-    private void anvilorder$resize(int width, int height, CallbackInfo ci) {
+    private void anvilorder$resize(net.minecraft.client.MinecraftClient client, int width, int height, CallbackInfo ci) {
         applySplitLayout();
-    }
-
-    @Inject(method = "containerTick", at = @At("TAIL"))
-    private void anvilorder$tick(CallbackInfo ci) {
-        updateButtonState();
-
-        // Restore saved anvil name if present
-        if (name != null && ResultHolder.savedAnvilName != null) {
-            name.setValue(ResultHolder.savedAnvilName);
-            ResultHolder.savedAnvilName = null;
-        }
-    }
-
-    @Unique
-    private void syncPanelPosition() {
-        // No-op: repositionElements handles all layout now
     }
 
     @Unique
     private void updateButtonState() {
         if (this.planButton == null) return;
-        ItemStack inputStack = this.menu.getSlot(0).getItem();
+        ItemStack inputStack = this.handler.getSlot(0).getStack();
         boolean enabled = !inputStack.isEmpty() && inputStack.isEnchantable();
         this.planButton.active = enabled;
         if (enabled) {
-            this.planButton.setTooltip(Tooltip.create(Component.translatable("button.anvilorder.tooltip")));
+            this.planButton.setTooltip(Tooltip.of(Text.translatable("button.anvilorder.tooltip")));
         } else {
-            this.planButton.setTooltip(Tooltip.create(Component.translatable("button.anvilorder.tooltip_disabled")));
+            this.planButton.setTooltip(Tooltip.of(Text.translatable("button.anvilorder.tooltip_disabled")));
         }
     }
 
-    @Inject(method = "extractBackground", at = @At("HEAD"))
-    private void anvilorder$extractBackgroundHead(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float delta, CallbackInfo ci) {
+    @Inject(method = "drawBackground", at = @At("HEAD"))
+    private void anvilorder$drawBackgroundHead(DrawContext context, float delta, int mouseX, int mouseY, CallbackInfo ci) {
         // Force split layout every frame BEFORE the anvil renders
         applySplitLayout();
+        updateButtonState();
+
+        // Restore saved anvil name if present (handledScreenTick is only on HandledScreen)
+        if (nameField != null && ResultHolder.savedAnvilName != null) {
+            nameField.setText(ResultHolder.savedAnvilName);
+            ResultHolder.savedAnvilName = null;
+        }
     }
 
-    @Inject(method = "extractBackground", at = @At("TAIL"))
-    private void anvilorder$extractBackground(GuiGraphicsExtractor extractor, int mouseX, int mouseY, float delta, CallbackInfo ci) {
-        guidePanel.render(extractor, mouseX, mouseY, delta);
+    @Inject(method = "drawBackground", at = @At("TAIL"))
+    private void anvilorder$drawBackground(DrawContext context, float delta, int mouseX, int mouseY, CallbackInfo ci) {
+        guidePanel.render(context, mouseX, mouseY, delta);
     }
 
     @Override
@@ -153,32 +140,32 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean dragging) {
-        if (guidePanel != null && guidePanel.isVisible() && guidePanel.mouseClicked(event.x(), event.y(), event.button())) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (guidePanel != null && guidePanel.isVisible() && guidePanel.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
-        return super.mouseClicked(event, dragging);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dragX, double dragY) {
-        if (guidePanel != null && guidePanel.isVisible() && guidePanel.mouseDragged(event.x(), event.y(), event.button(), dragX, dragY)) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (guidePanel != null && guidePanel.isVisible() && guidePanel.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
             return true;
         }
-        return super.mouseDragged(event, dragX, dragY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
     @Override
-    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
-        if (guidePanel != null && guidePanel.isVisible() && guidePanel.mouseReleased(event.x(), event.y(), event.button())) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (guidePanel != null && guidePanel.isVisible() && guidePanel.mouseReleased(mouseX, mouseY, button)) {
             return true;
         }
-        return super.mouseReleased(event);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
-    public void onClose() {
+    public void close() {
         guidePanel.clear();
-        super.onClose();
+        super.close();
     }
 }

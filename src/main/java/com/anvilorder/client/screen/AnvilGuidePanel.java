@@ -2,11 +2,11 @@ package com.anvilorder.client.screen;
 
 import com.anvilorder.solver.CombineStep;
 import com.anvilorder.solver.SolverResult;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 /**
  * Docked side panel next to the anvil screen showing step-by-step
@@ -22,7 +22,7 @@ public class AnvilGuidePanel {
     private static final int SCROLL_BAR_WIDTH = 5;
     private static final int H_SCROLL_RESERVE = 8;
 
-    private final Minecraft minecraft;
+    private final MinecraftClient client;
     private SolverResult result;
     private double scrollY;
     private double scrollX;
@@ -36,7 +36,7 @@ public class AnvilGuidePanel {
     public int width;
 
     public AnvilGuidePanel() {
-        this.minecraft = Minecraft.getInstance();
+        this.client = MinecraftClient.getInstance();
     }
 
     public void setResult(SolverResult result) {
@@ -59,17 +59,17 @@ public class AnvilGuidePanel {
         return result.steps.size() * (LINE_HEIGHT * 2 + STEP_GAP) + LINE_HEIGHT + 10;
     }
 
-    private int maxTextW(Font font) {
+    private int maxTextW(TextRenderer font) {
         int max = 0;
         if (result != null) {
             for (int i = 0; i < result.steps.size(); i++) {
                 CombineStep s = result.steps.get(i);
                 String line1 = (i + 1) + ". Combine " + s.leftDescription + " with " + s.rightDescription;
                 String line2 = "   Cost: " + s.levelCost + " levels (" + s.xpCost + " xp), PWP: " + s.priorWorkPenalty + " levels";
-                max = Math.max(max, font.width(line1));
-                max = Math.max(max, font.width(line2));
+                max = Math.max(max, font.getWidth(line1));
+                max = Math.max(max, font.getWidth(line2));
             }
-            max = Math.max(max, font.width("Total: " + result.totalLevels + " levels (" + result.totalXp + " XP)"));
+            max = Math.max(max, font.getWidth("Total: " + result.totalLevels + " levels (" + result.totalXp + " XP)"));
         }
         return max + PADDING;
     }
@@ -81,7 +81,7 @@ public class AnvilGuidePanel {
     private int visibleH()      { return contentBottom() - contentTop(); }
     private int maxScrollY()    { return Math.max(0, totalContentH() - visibleH()); }
     private int maxScrollX()    {
-        Font f = minecraft.font;
+        TextRenderer f = client.textRenderer;
         int panelW = Math.max(PANEL_WIDTH, this.width);
         int textAreaW = panelW - PADDING * 2 - SCROLL_BAR_WIDTH - 3;
         return Math.max(0, maxTextW(f) - textAreaW);
@@ -89,14 +89,14 @@ public class AnvilGuidePanel {
 
     // --- Render ---
 
-    public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    public void render(DrawContext graphics, int mouseX, int mouseY, float delta) {
         if (ResultHolder.showGuidePanel && ResultHolder.pendingResult != null) {
             setResult(ResultHolder.pendingResult);
             ResultHolder.clear();
         }
         if (!isVisible()) return;
 
-        Font font = minecraft.font;
+        TextRenderer font = client.textRenderer;
         int pw = Math.max(PANEL_WIDTH, this.width);
         int px = x, py = y, ph = height;
         int ct = contentTop(), cb = contentBottom();
@@ -118,8 +118,8 @@ public class AnvilGuidePanel {
 
         // Header
         graphics.fill(px + 2, py + 2, px + pw - 2, py + HEADER_HEIGHT, 0xFF2A2A2A);
-        Component title = Component.translatable("panel.anvilorder.title").withStyle(ChatFormatting.GOLD);
-        graphics.centeredText(font, title, px + pw / 2, py + 6, 0xFFFFFFFF);
+        Text title = Text.translatable("panel.anvilorder.title").formatted(Formatting.GOLD);
+        graphics.drawCenteredTextWithShadow(font, title, px + pw / 2, py + 6, 0xFFFFFFFF);
         graphics.fill(px + 2, py + HEADER_HEIGHT, px + pw - 2, py + HEADER_HEIGHT + 1, 0xFF444444);
 
         // Text area bounds
@@ -138,33 +138,33 @@ public class AnvilGuidePanel {
 
                 // Line 1: "N. Combine Left with Right"
                 String num = (i + 1) + ". ";
-                int nw = font.width(num);
-                graphics.text(font, Component.literal(num).withStyle(ChatFormatting.GOLD),
-                        tl - sx, dy, 0xFFFFAA00);
+                int nw = font.getWidth(num);
+                graphics.drawText(font, Text.literal(num).formatted(Formatting.GOLD),
+                        tl - sx, dy, 0xFFFFAA00, false);
 
                 String combine = "Combine ";
-                graphics.text(font, Component.literal(combine).withStyle(ChatFormatting.WHITE),
-                        tl + nw - sx, dy, 0xFFCCCCCC);
+                graphics.drawText(font, Text.literal(combine).formatted(Formatting.WHITE),
+                        tl + nw - sx, dy, 0xFFCCCCCC, false);
 
-                int cx = tl + nw + font.width(combine);
-                graphics.text(font, Component.literal(s.leftDescription).withStyle(ChatFormatting.GREEN),
-                        cx - sx, dy, 0xFF55FF55);
+                int cx = tl + nw + font.getWidth(combine);
+                graphics.drawText(font, Text.literal(s.leftDescription).formatted(Formatting.GREEN),
+                        cx - sx, dy, 0xFF55FF55, false);
 
-                cx += font.width(s.leftDescription);
-                graphics.text(font, Component.literal(" with ").withStyle(ChatFormatting.WHITE),
-                        cx - sx, dy, 0xFFCCCCCC);
+                cx += font.getWidth(s.leftDescription);
+                graphics.drawText(font, Text.literal(" with ").formatted(Formatting.WHITE),
+                        cx - sx, dy, 0xFFCCCCCC, false);
 
-                cx += font.width(" with ");
-                graphics.text(font, Component.literal(s.rightDescription).withStyle(ChatFormatting.AQUA),
-                        cx - sx, dy, 0xFF55FFFF);
+                cx += font.getWidth(" with ");
+                graphics.drawText(font, Text.literal(s.rightDescription).formatted(Formatting.AQUA),
+                        cx - sx, dy, 0xFF55FFFF, false);
 
                 dy += LINE_HEIGHT;
 
                 // Line 2: "   Cost: X levels (Y xp), PWP: Z levels"
                 String costLine = "   Cost: " + s.levelCost + " levels (" + s.xpCost + " xp), PWP: " + s.priorWorkPenalty
                         + (s.priorWorkPenalty == 1 ? " level" : " levels");
-                graphics.text(font, Component.literal(costLine).withStyle(ChatFormatting.GRAY),
-                        tl - sx, dy, 0xFF999999);
+                graphics.drawText(font, Text.literal(costLine).formatted(Formatting.GRAY),
+                        tl - sx, dy, 0xFF999999, false);
 
                 dy += LINE_HEIGHT + STEP_GAP;
             }
@@ -172,8 +172,8 @@ public class AnvilGuidePanel {
             // Summary
             dy += 2;
             String totalS = "Total: " + result.totalLevels + " levels (" + result.totalXp + " XP)";
-            graphics.text(font, Component.literal(totalS).withStyle(ChatFormatting.GOLD),
-                    tl - sx, dy, 0xFFFFAA00);
+            graphics.drawText(font, Text.literal(totalS).formatted(Formatting.GOLD),
+                    tl - sx, dy, 0xFFFFAA00, false);
         }
 
         graphics.disableScissor();

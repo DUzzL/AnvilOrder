@@ -1,8 +1,5 @@
-accessWidener v2 official
+accessWidener v2 named
 
-# Allow access to AnvilScreen private fields for button injection
-accessible class net/minecraft/client/gui/screens/inventory/AnvilScreen
-
-# ItemCombinerScreen protected fields — used to read input slot item
-accessible class net/minecraft/client/gui/screens/inventory/ItemCombinerScreen field input Lnet/minecraft/world/inventory/slot/Slot;
-accessible class net/minecraft/client/gui/screens/inventory/ItemCombinerScreen field addition Lnet/minecraft/world/inventory/slot/Slot;
+# Allow access to AnvilScreen private name field for rename text box restore
+accessible	class	net/minecraft/client/gui/screen/ingame/AnvilScreen
+accessible	field	net/minecraft/client/gui/screen/ingame/AnvilScreen	nameField	Lnet/minecraft/client/gui/widget/TextFieldWidget;
