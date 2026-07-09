@@ -2,20 +2,20 @@ package com.anvilorder.client.screen;
 
 import com.anvilorder.data.EnchantmentData;
 import com.anvilorder.solver.EnchantmentSolver;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractSliderButton;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Checkbox;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.Holder;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.CheckboxWidget;
+import net.minecraft.client.gui.widget.SliderWidget;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -29,35 +29,39 @@ public class EnchantmentSelectScreen extends Screen {
     private final List<EnchantSlot> slots = new ArrayList<>();
     private int panelX, panelY, panelH;
     private int contentTop, contentBottom, footerTop;
-    private Button calcBtn, cancelBtn;
+    private ButtonWidget calcBtn, cancelBtn;
     private boolean calculating;
     private double scrollAmount;
     private boolean draggingScroll;
 
-    public EnchantmentSelectScreen(Component title, ItemStack target, Screen parent) {
+    public EnchantmentSelectScreen(Text title, ItemStack target, Screen parent) {
         super(title);
         this.targetItem = target;
         this.parentScreen = parent;
     }
 
-    @Override protected void init() {
-        super.init(); slots.clear(); scrollAmount = 0; draggingScroll = false;
+    @Override
+    protected void init() {
+        super.init();
+        slots.clear();
+        scrollAmount = 0;
+        draggingScroll = false;
         String itemName = EnchantmentData.getSimpleItemName(targetItem.getItem());
         Set<String> applicable = new LinkedHashSet<>(EnchantmentData.getEnchantmentsForItem(itemName));
 
-        if (this.minecraft == null || this.minecraft.getConnection() == null) return;
-        Registry<Enchantment> enchantRegistry = this.minecraft.getConnection().registryAccess()
-                .lookupOrThrow(Registries.ENCHANTMENT);
+        if (this.client == null || this.client.getNetworkHandler() == null) return;
+        Registry<Enchantment> enchantRegistry = this.client.getNetworkHandler().getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT);
 
-        for (var entry : enchantRegistry.entrySet()) {
-            String p = entry.getKey().identifier().getPath();
+        for (var entry : enchantRegistry.getEntrySet()) {
+            String p = entry.getKey().getValue().getPath();
             if (!EnchantmentData.getAllEnchantPaths().contains(p)) continue;
-            if (entry.getValue().canEnchant(targetItem)) applicable.add(p);
-            if (targetItem.getItem() == Items.BOOK || targetItem.getItem() == Items.ENCHANTED_BOOK) applicable.add(p);
+            if (entry.getValue().isAcceptableItem(targetItem)) applicable.add(p);
+            if (targetItem.isOf(Items.BOOK) || targetItem.isOf(Items.ENCHANTED_BOOK)) applicable.add(p);
         }
 
         for (String ep : applicable) {
-            Optional<Holder<Enchantment>> e = EnchantmentData.getEnchantEntry(ep);
+            Optional<RegistryEntry<Enchantment>> e = EnchantmentData.getEnchantEntry(ep);
             if (e.isEmpty()) continue;
             Enchantment ench = e.get().value();
             slots.add(new EnchantSlot(ep, e.get(), ench.getMaxLevel(), EnchantmentData.getWeight(ep)));
@@ -77,16 +81,16 @@ public class EnchantmentSelectScreen extends Screen {
         contentBottom = panelY + HEADER_H + vis * ITEM_H;
         footerTop = contentBottom + 4;
 
-        calcBtn = Button.builder(Component.translatable("button.anvilorder.calculate"), b -> runCalc())
-                .bounds(panelX + 20, footerTop + 10, 90, 20).build();
-        cancelBtn = Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(panelX + PW - 110, footerTop + 10, 90, 20).build();
+        calcBtn = ButtonWidget.builder(Text.translatable("button.anvilorder.calculate"), b -> runCalc())
+                .dimensions(panelX + 20, footerTop + 10, 90, 20).build();
+        cancelBtn = ButtonWidget.builder(Text.translatable("gui.cancel"), b -> close())
+                .dimensions(panelX + PW - 110, footerTop + 10, 90, 20).build();
 
         rebuild();
     }
 
     private void rebuild() {
-        clearWidgets();
+        clearChildren();
         int visibleH = contentBottom - contentTop;
         int totalH = slots.size() * ITEM_H;
         int maxScroll = Math.max(0, totalH - visibleH);
@@ -96,24 +100,25 @@ public class EnchantmentSelectScreen extends Screen {
         for (EnchantSlot s : slots) {
             int slotY = contentTop + s.index * ITEM_H - (int) scrollAmount;
             if (slotY + ITEM_H <= contentTop || slotY >= contentBottom) continue;
-            addRenderableWidget(Checkbox.builder(s.text(), Minecraft.getInstance().font)
-                    .selected(s.on).pos(panelX + 4, slotY + 2).maxWidth(180)
-                    .onValueChange((c, v) -> { s.on = v; rebuild(); }).build());
+            addDrawableChild(CheckboxWidget.builder(s.text(), MinecraftClient.getInstance().textRenderer)
+                    .checked(s.on).pos(panelX + 4, slotY + 2).maxWidth(180)
+                    .callback((c, v) -> { s.on = v; rebuild(); }).build());
             if (s.maxLvl > 1) {
                 var sl = new LevSlider(panelX + 190, slotY + 2, 44, 20, s);
                 sl.active = s.on;
-                addRenderableWidget(sl);
+                addDrawableChild(sl);
             }
         }
-        addRenderableWidget(calcBtn);
-        addRenderableWidget(cancelBtn);
+        addDrawableChild(calcBtn);
+        addDrawableChild(cancelBtn);
     }
 
-    @Override public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float d) {
+    @Override
+    public void render(DrawContext g, int mx, int my, float d) {
         int cb = panelY + panelH;
         g.fill(panelX - 2, panelY - 2, panelX + PW + 2, cb + 2, 0xCC000000);
         g.fill(panelX, panelY, panelX + PW, cb, 0xFF222222);
-        g.centeredText(Minecraft.getInstance().font, this.title, panelX + PW / 2, panelY + 8, 0xFFFFFFFF);
+        g.drawCenteredTextWithShadow(MinecraftClient.getInstance().textRenderer, this.title, panelX + PW / 2, panelY + 8, 0xFFFFFFFF);
         g.fill(panelX + 4, panelY + HEADER_H - 2, panelX + PW - 4, panelY + HEADER_H - 1, 0xFF555555);
         g.fill(panelX + 4, contentBottom + 1, panelX + PW - 4, contentBottom + 2, 0xFF555555);
 
@@ -136,8 +141,8 @@ public class EnchantmentSelectScreen extends Screen {
             int bg = cfl ? 0xAA662222 : (s.on ? 0xFF333333 : 0xFF222222);
             g.fill(panelX + 2, sy, contentRight, sy + ITEM_H, bg);
             if (s.on && s.maxLvl > 1)
-                g.text(Minecraft.getInstance().font, "Lvl " + s.lvl, contentRight - 42, sy + 6, cfl ? 0xFF6666 : 0xAAAAAA);
-            if (cfl) g.text(Minecraft.getInstance().font, "\u26A0", panelX + PW - 58, sy + 6, 0xFFFF55);
+                g.drawText(MinecraftClient.getInstance().textRenderer, "Lvl " + s.lvl, contentRight - 42, sy + 6, cfl ? 0xFF6666 : 0xAAAAAA, false);
+            if (cfl) g.drawText(MinecraftClient.getInstance().textRenderer, "\u26A0", panelX + PW - 58, sy + 6, 0xFFFF55, false);
         }
 
         // Scrollbar — flush right inside panel
@@ -149,14 +154,15 @@ public class EnchantmentSelectScreen extends Screen {
             g.fill(sbX, sbY, sbX + SCROLL_W, sbY + sbH, draggingScroll ? 0xFFAAAAAA : 0xFF666666);
         }
 
-        if (calculating) g.centeredText(Minecraft.getInstance().font,
-                Component.translatable("text.anvilorder.calculating"),
+        if (calculating) g.drawCenteredTextWithShadow(MinecraftClient.getInstance().textRenderer,
+                Text.translatable("text.anvilorder.calculating"),
                 panelX + PW / 2, footerTop + 4, 0xFFFF55);
 
-        super.extractRenderState(g, mx, my, d);
+        super.render(g, mx, my, d);
     }
 
-    @Override public boolean mouseScrolled(double mx, double my, double horiz, double vert) {
+    @Override
+    public boolean mouseScrolled(double mx, double my, double horiz, double vert) {
         int totalH = slots.size() * ITEM_H;
         int visH = contentBottom - contentTop;
         if (totalH > visH) {
@@ -167,15 +173,16 @@ public class EnchantmentSelectScreen extends Screen {
         return super.mouseScrolled(mx, my, horiz, vert);
     }
 
-    @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent evt, boolean dragging) {
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         int totalH = slots.size() * ITEM_H;
         int visH = contentBottom - contentTop;
-        if (totalH <= visH) return super.mouseClicked(evt, dragging);
+        if (totalH <= visH) return super.mouseClicked(mouseX, mouseY, button);
 
         int sbX = panelX + PW - SCROLL_W - 1;
-        if (evt.x() < sbX || evt.x() > sbX + SCROLL_W
-                || evt.y() < contentTop || evt.y() > contentBottom) {
-            return super.mouseClicked(evt, dragging);
+        if (mouseX < sbX || mouseX > sbX + SCROLL_W
+                || mouseY < contentTop || mouseY > contentBottom) {
+            return super.mouseClicked(mouseX, mouseY, button);
         }
 
         int thumbH = Math.max(20, visH * visH / totalH);
@@ -184,9 +191,9 @@ public class EnchantmentSelectScreen extends Screen {
         int thumbY = contentTop + (maxScroll == 0 ? 0
                 : (int)(scrollAmount / maxScroll * (trackH - thumbH)));
 
-        if (evt.y() < thumbY) {
+        if (mouseY < thumbY) {
             scrollAmount = Math.max(0, scrollAmount - visH);
-        } else if (evt.y() > thumbY + thumbH) {
+        } else if (mouseY > thumbY + thumbH) {
             scrollAmount = Math.min(maxScroll, scrollAmount + visH);
         } else {
             // Click on thumb — start drag, snap thumb center to mouse
@@ -199,13 +206,15 @@ public class EnchantmentSelectScreen extends Screen {
         return true;
     }
 
-    @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent evt) {
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         draggingScroll = false;
-        return super.mouseReleased(evt);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent evt, double dx, double dy) {
-        if (!draggingScroll) return super.mouseDragged(evt, dx, dy);
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (!draggingScroll) return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
         int totalH = slots.size() * ITEM_H;
         int visH = contentBottom - contentTop;
         int trackH = visH;
@@ -213,7 +222,7 @@ public class EnchantmentSelectScreen extends Screen {
         int maxScroll = totalH - visH;
 
         // Map mouse Y within track to scroll position
-        double ratio = (evt.y() - contentTop - thumbH / 2.0) / Math.max(1, trackH - thumbH);
+        double ratio = (mouseY - contentTop - thumbH / 2.0) / Math.max(1, trackH - thumbH);
         scrollAmount = Math.clamp(ratio * maxScroll, 0, maxScroll);
         rebuild();
         return true;
@@ -233,9 +242,9 @@ public class EnchantmentSelectScreen extends Screen {
         }
         if (hasConflict) {
             // Show error and return without calculating
-            if (this.minecraft != null) {
-                this.minecraft.setScreenAndShow(new IncompatibleEnchantmentsScreen(
-                        Component.translatable("text.anvilorder.incompatible"),
+            if (this.client != null) {
+                this.client.setScreen(new IncompatibleEnchantmentsScreen(
+                        Text.translatable("text.anvilorder.incompatible"),
                         this
                 ));
             }
@@ -252,30 +261,71 @@ public class EnchantmentSelectScreen extends Screen {
             }
         }
         if (in.isEmpty()) return;
-        calculating = true; calcBtn.active = false;
-        boolean book = targetItem.getItem() == Items.BOOK || targetItem.getItem() == Items.ENCHANTED_BOOK;
+        calculating = true;
+        calcBtn.active = false;
+        boolean book = targetItem.isOf(Items.BOOK) || targetItem.isOf(Items.ENCHANTED_BOOK);
         CompletableFuture.supplyAsync(() -> EnchantmentSolver.solve(book, in, nameMap)).thenAcceptAsync(r -> {
             calculating = false;
-            if (r.success) { ResultHolder.setResult(r); onClose(); } else calcBtn.active = true;
-        }, Minecraft.getInstance());
+            if (r.success) { ResultHolder.setResult(r); close(); } else calcBtn.active = true;
+        }, MinecraftClient.getInstance());
     }
 
     private static int computeNumericId(String path) {
         return path.hashCode();
     }
 
-    @Override public void onClose() { if (minecraft != null) minecraft.setScreenAndShow(parentScreen); }
+    @Override
+    public void close() {
+        if (client != null) client.setScreen(parentScreen);
+    }
 
-    static class EnchantSlot { String path; Holder<Enchantment> entry; int maxLvl, weight, index, lvl = 1; boolean on; EnchantSlot(String p, Holder<Enchantment> e, int ml, int w) { path = p; entry = e; maxLvl = ml; weight = w; } Component text() { MutableComponent t = entry.value().description().copy(); if (maxLvl > 1) t.append(" (" + lvl + "/" + maxLvl + ")"); return t; } }
+    static class EnchantSlot {
+        String path;
+        RegistryEntry<Enchantment> entry;
+        int maxLvl, weight, index, lvl = 1;
+        boolean on;
 
-    static class LevSlider extends AbstractSliderButton { EnchantSlot slot; LevSlider(int x, int y, int w, int h, EnchantSlot s) { super(x, y, w, h, Component.literal("" + s.lvl), (s.lvl - 1.0) / Math.max(1, s.maxLvl - 1)); slot = s; updateMessage(); } @Override protected void updateMessage() { setMessage(Component.literal("" + slot.lvl)); } @Override protected void applyValue() { slot.lvl = (int) Math.round(value * (slot.maxLvl - 1)) + 1; updateMessage(); } }
+        EnchantSlot(String p, RegistryEntry<Enchantment> e, int ml, int w) {
+            path = p;
+            entry = e;
+            maxLvl = ml;
+            weight = w;
+        }
+
+        Text text() {
+            MutableText t = entry.value().description().copy();
+            if (maxLvl > 1) t.append(" (" + lvl + "/" + maxLvl + ")");
+            return t;
+        }
+    }
+
+    static class LevSlider extends SliderWidget {
+        EnchantSlot slot;
+
+        LevSlider(int x, int y, int w, int h, EnchantSlot s) {
+            super(x, y, w, h, Text.literal("" + s.lvl), (s.lvl - 1.0) / Math.max(1, s.maxLvl - 1));
+            slot = s;
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Text.literal("" + slot.lvl));
+        }
+
+        @Override
+        protected void applyValue() {
+            slot.lvl = (int) Math.round(value * (slot.maxLvl - 1)) + 1;
+            updateMessage();
+        }
+    }
 }
 
 /** Simple error popup shown when incompatible enchantments are selected. */
 class IncompatibleEnchantmentsScreen extends Screen {
     private final Screen parentScreen;
 
-    protected IncompatibleEnchantmentsScreen(Component title, Screen parent) {
+    protected IncompatibleEnchantmentsScreen(Text title, Screen parent) {
         super(title);
         this.parentScreen = parent;
     }
@@ -284,23 +334,23 @@ class IncompatibleEnchantmentsScreen extends Screen {
     protected void init() {
         int midX = this.width / 2;
         int midY = this.height / 2;
-        addRenderableWidget(Button.builder(
-                Component.translatable("gui.ok"),
-                b -> onClose()
-        ).bounds(midX - 40, midY + 10, 80, 20).build());
+        addDrawableChild(ButtonWidget.builder(
+                Text.translatable("gui.ok"),
+                b -> close()
+        ).dimensions(midX - 40, midY + 10, 80, 20).build());
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float d) {
-        super.extractRenderState(g, mx, my, d);
+    public void render(DrawContext g, int mx, int my, float d) {
+        super.render(g, mx, my, d);
         int midX = this.width / 2;
         int midY = this.height / 2;
         g.fill(midX - 130, midY - 30, midX + 130, midY + 40, 0xDD000000);
-        g.centeredText(Minecraft.getInstance().font, this.title, midX, midY - 15, 0xFFFF5555);
+        g.drawCenteredTextWithShadow(MinecraftClient.getInstance().textRenderer, this.title, midX, midY - 15, 0xFFFF5555);
     }
 
     @Override
-    public void onClose() {
-        if (minecraft != null) minecraft.setScreenAndShow(parentScreen);
+    public void close() {
+        if (client != null) client.setScreen(parentScreen);
     }
 }

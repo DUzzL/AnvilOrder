@@ -1,13 +1,13 @@
 package com.anvilorder.data;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.Holder;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.item.Item;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
 
 import java.util.*;
 
@@ -17,9 +17,7 @@ import java.util.*;
  * Weights and incompatibilities are hardcoded because vanilla doesn't expose
  * these programmatically. The data mirrors iamcal/enchant-order's data.js.
  *
- * MC 26.1+ uses Mojang class names: ResourceKey<Enchantment> instead of
- * RegistryKey, BuiltInRegistries instead of Registries, Holder instead of
- * RegistryEntry.
+ * MC 1.21 uses Yarn names: RegistryKey<Enchantment>, RegistryEntry, RegistryKeys.ENCHANTMENT.
  */
 public class EnchantmentData {
 
@@ -30,8 +28,8 @@ public class EnchantmentData {
     /** Which enchantments are valid for which item types. */
     private static final Map<String, Set<String>> ITEM_ENCHANTS = new HashMap<>();
 
-    /** Maps enchantment ID string to its ResourceKey — lazily initialized */
-    private static Map<String, ResourceKey<Enchantment>> ENCHANT_KEYS;
+    /** Maps enchantment ID string to its RegistryKey — lazily initialized */
+    private static Map<String, RegistryKey<Enchantment>> ENCHANT_KEYS;
     private static boolean keysInitialized = false;
 
     static {
@@ -77,7 +75,7 @@ public class EnchantmentData {
         WEIGHTS.put("punch", 2);
         WEIGHTS.put("respiration", 2);
         WEIGHTS.put("riptide", 2);
-        WEIGHTS.put("sweeping", 2);
+        WEIGHTS.put("sweeping_edge", 2);
         WEIGHTS.put("breach", 2);
         WEIGHTS.put("wind_burst", 2);
 
@@ -145,7 +143,7 @@ public class EnchantmentData {
                 "vanishing_curse");
 
         addItemEnchants("sword", "sharpness", "smite", "bane_of_arthropods", "knockback",
-                "fire_aspect", "looting", "sweeping", "unbreaking", "mending", "vanishing_curse");
+                "fire_aspect", "looting", "sweeping_edge", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("axe", "sharpness", "smite", "bane_of_arthropods", "efficiency",
                 "fortune", "silk_touch", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("mace", "density", "breach", "smite", "bane_of_arthropods",
@@ -178,19 +176,19 @@ public class EnchantmentData {
         ITEM_ENCHANTS.computeIfAbsent(itemName, k -> new HashSet<>()).addAll(Arrays.asList(enchants));
     }
 
-    // ---- ResourceKey mapping ----
+    // ---- RegistryKey mapping ----
     private static void ensureKeysInitialized() {
         if (keysInitialized) return;
         ENCHANT_KEYS = new HashMap<>();
 
-        // MC 26.2+: Enchantments are data-driven, get registry from Minecraft instance
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.getConnection() == null) return;
-        Registry<Enchantment> enchantRegistry = mc.getConnection().registryAccess()
-                .lookupOrThrow(Registries.ENCHANTMENT);
+        // Enchantments are data-driven; get registry from the client network handler
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.getNetworkHandler() == null) return;
+        Registry<Enchantment> enchantRegistry = mc.getNetworkHandler().getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT);
 
-        for (Map.Entry<ResourceKey<Enchantment>, Enchantment> entry : enchantRegistry.entrySet()) {
-            String path = entry.getKey().identifier().getPath();
+        for (Map.Entry<RegistryKey<Enchantment>, Enchantment> entry : enchantRegistry.getEntrySet()) {
+            String path = entry.getKey().getValue().getPath();
             if (WEIGHTS.containsKey(path)) {
                 ENCHANT_KEYS.put(path, entry.getKey());
             }
@@ -206,7 +204,7 @@ public class EnchantmentData {
     }
 
     /** Get the maximum level for an enchantment. */
-    public static int getMaxLevel(Holder<Enchantment> enchant) {
+    public static int getMaxLevel(RegistryEntry<Enchantment> enchant) {
         return enchant.value().getMaxLevel();
     }
 
@@ -236,23 +234,24 @@ public class EnchantmentData {
         return Set.of();
     }
 
-    /** Get the ResourceKey for an enchantment by its path string. */
-    public static Optional<ResourceKey<Enchantment>> getEnchantKey(String path) {
+    /** Get the RegistryKey for an enchantment by its path string. */
+    public static Optional<RegistryKey<Enchantment>> getEnchantKey(String path) {
         ensureKeysInitialized();
         return Optional.ofNullable(ENCHANT_KEYS.get(path));
     }
 
-    /** Get the Holder for an enchantment by its path string. */
-    public static Optional<Holder<Enchantment>> getEnchantEntry(String path) {
+    /** Get the RegistryEntry for an enchantment by its path string. */
+    public static Optional<RegistryEntry<Enchantment>> getEnchantEntry(String path) {
         ensureKeysInitialized();
-        ResourceKey<Enchantment> key = ENCHANT_KEYS.get(path);
+        RegistryKey<Enchantment> key = ENCHANT_KEYS.get(path);
         if (key == null) return Optional.empty();
 
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.getConnection() == null) return Optional.empty();
-        Registry<Enchantment> enchantRegistry = mc.getConnection().registryAccess()
-                .lookupOrThrow(Registries.ENCHANTMENT);
-        return enchantRegistry.get(key).map(Holder.class::cast);
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.getNetworkHandler() == null) return Optional.empty();
+        Registry<Enchantment> enchantRegistry = mc.getNetworkHandler().getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT);
+        // Prefer entry-by-id; getOptional(RegistryKey) returns the raw value, not a RegistryEntry.
+        return enchantRegistry.getEntry(key.getValue()).map(e -> (RegistryEntry<Enchantment>) e);
     }
 
     /** Get all known enchantment paths with weights. */
@@ -262,6 +261,6 @@ public class EnchantmentData {
 
     /** Determine the simple item name from an Item. */
     public static String getSimpleItemName(Item item) {
-        return BuiltInRegistries.ITEM.getKey(item).getPath();
+        return Registries.ITEM.getId(item).getPath();
     }
 }
