@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "anvilorder",
+  "version": "1.0.0",
+  "name": "AnvilOrder",
+  "description": "Calculates the cheapest enchantment combination order for the anvil.",
+  "authors": ["AnvilOrder"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.anvilorder.client.AnvilOrderClient"
+    ]
+  },
+  "mixins": [
+    "anvilorder.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": ">=26.1 <26.2",
+    "fabric-api": ">=0.145.1+26.1",
+    "java": ">=25"
+  }
+}
