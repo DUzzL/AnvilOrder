@@ -22,8 +22,8 @@ import java.util.concurrent.CompletableFuture;
 
 public class EnchantmentSelectScreen extends Screen {
 
-    private static final int ITEM_H = 24, HEADER_H = 30, FOOTER_H = 42, SCROLL_W = 6;
-    private static final int PW = 240, MARGIN = 10; // MARGIN = min space above/below panel
+    private static final int ITEM_H = 26, HEADER_H = 38, FOOTER_H = 46, SCROLL_W = 6;
+    private static final int PW = 270, MARGIN = 10; // MARGIN = min space above/below panel
     private final ItemStack targetItem;
     private final Screen parentScreen;
     private final List<EnchantSlot> slots = new ArrayList<>();
@@ -78,9 +78,9 @@ public class EnchantmentSelectScreen extends Screen {
         footerTop = contentBottom + 4;
 
         calcBtn = Button.builder(Component.translatable("button.anvilorder.calculate"), b -> runCalc())
-                .bounds(panelX + 20, footerTop + 10, 90, 20).build();
+                .bounds(panelX + 18, footerTop + 13, 104, 20).build();
         cancelBtn = Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(panelX + PW - 110, footerTop + 10, 90, 20).build();
+                .bounds(panelX + PW - 122, footerTop + 13, 104, 20).build();
 
         rebuild();
     }
@@ -97,10 +97,10 @@ public class EnchantmentSelectScreen extends Screen {
             int slotY = contentTop + s.index * ITEM_H - (int) scrollAmount;
             if (slotY + ITEM_H <= contentTop || slotY >= contentBottom) continue;
             addRenderableWidget(Checkbox.builder(s.text(), Minecraft.getInstance().font)
-                    .selected(s.on).pos(panelX + 4, slotY + 2).maxWidth(180)
+                    .selected(s.on).pos(panelX + 8, slotY + 3).maxWidth(PW - 82)
                     .onValueChange((c, v) -> { s.on = v; rebuild(); }).build());
             if (s.maxLvl > 1) {
-                var sl = new LevSlider(panelX + 190, slotY + 2, 44, 20, s);
+                var sl = new LevSlider(panelX + PW - 56, slotY + 3, 46, 20, s);
                 sl.active = s.on;
                 addRenderableWidget(sl);
             }
@@ -111,11 +111,19 @@ public class EnchantmentSelectScreen extends Screen {
 
     @Override public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float d) {
         int cb = panelY + panelH;
-        g.fill(panelX - 2, panelY - 2, panelX + PW + 2, cb + 2, 0xCC000000);
-        g.fill(panelX, panelY, panelX + PW, cb, 0xFF222222);
-        g.centeredText(Minecraft.getInstance().font, this.title, panelX + PW / 2, panelY + 8, 0xFFFFFFFF);
-        g.fill(panelX + 4, panelY + HEADER_H - 2, panelX + PW - 4, panelY + HEADER_H - 1, 0xFF555555);
-        g.fill(panelX + 4, contentBottom + 1, panelX + PW - 4, contentBottom + 2, 0xFF555555);
+        int selectedCount = (int) slots.stream().filter(s -> s.on).count();
+
+        // Layered forge-like frame, distinct from the vanilla inventory panels.
+        g.fill(panelX - 3, panelY - 3, panelX + PW + 3, cb + 3, 0xCC080A0D);
+        g.fill(panelX - 1, panelY - 1, panelX + PW + 1, cb + 1, 0xFF8A6B3D);
+        g.fill(panelX, panelY, panelX + PW, cb, 0xFF171A20);
+        g.fill(panelX + 2, panelY + 2, panelX + PW - 2, panelY + HEADER_H, 0xFF252A33);
+        g.fill(panelX + 3, panelY + HEADER_H - 2, panelX + PW - 3, panelY + HEADER_H, 0xFFB58A4B);
+        g.centeredText(Minecraft.getInstance().font, this.title, panelX + PW / 2, panelY + 8, 0xFFFFD98A);
+        g.centeredText(Minecraft.getInstance().font, Component.literal(selectedCount + " selected"),
+                panelX + PW / 2, panelY + 21, 0xFF9DA7B3);
+        g.fill(panelX + 4, contentBottom + 2, panelX + PW - 4, contentBottom + 3, 0xFF4A5360);
+        g.fill(panelX + 3, footerTop + 5, panelX + PW - 3, footerTop + 6, 0xFF252A33);
 
         int visibleH = contentBottom - contentTop;
         int totalH = slots.size() * ITEM_H;
@@ -133,11 +141,14 @@ public class EnchantmentSelectScreen extends Screen {
 
             boolean cfl = false;
             if (s.on) for (String cp : EnchantmentData.getIncompatible(s.path)) if (sel.contains(cp)) { cfl = true; break; }
-            int bg = cfl ? 0xAA662222 : (s.on ? 0xFF333333 : 0xFF222222);
-            g.fill(panelX + 2, sy, contentRight, sy + ITEM_H, bg);
-            if (s.on && s.maxLvl > 1)
-                g.text(Minecraft.getInstance().font, "Lvl " + s.lvl, contentRight - 42, sy + 6, cfl ? 0xFF6666 : 0xAAAAAA);
-            if (cfl) g.text(Minecraft.getInstance().font, "\u26A0", panelX + PW - 58, sy + 6, 0xFFFF55);
+            int bg = cfl ? 0xFF54282A : (s.on ? 0xFF283A42 : 0xFF1C2027);
+            g.fill(panelX + 4, sy, contentRight, sy + ITEM_H - 1, bg);
+            if (s.on) g.fill(panelX + 4, sy, panelX + 6, sy + ITEM_H - 1,
+                    cfl ? 0xFFFF6B6B : 0xFF69C6A0);
+            if (cfl) {
+                g.text(Minecraft.getInstance().font, "!", panelX + PW - 69, sy + 8, 0xFFFFD45A);
+                g.text(Minecraft.getInstance().font, "Conflict", panelX + PW - 104, sy + 8, 0xFFFF8E8E);
+            }
         }
 
         // Scrollbar — flush right inside panel
@@ -145,8 +156,9 @@ public class EnchantmentSelectScreen extends Screen {
             int sbX = panelX + PW - SCROLL_W - 1;
             int sbH = Math.max(20, visibleH * visibleH / Math.max(1, totalH));
             int sbY = contentTop + (maxScroll == 0 ? 0 : (int)(scrollAmount * (visibleH - sbH) / (double) maxScroll));
-            g.fill(sbX, contentTop, sbX + SCROLL_W, contentBottom, 0xFF0D0D0D);
-            g.fill(sbX, sbY, sbX + SCROLL_W, sbY + sbH, draggingScroll ? 0xFFAAAAAA : 0xFF666666);
+            g.fill(sbX, contentTop, sbX + SCROLL_W, contentBottom, 0xFF0C0E12);
+            g.fill(sbX + 1, sbY, sbX + SCROLL_W - 1, sbY + sbH,
+                    draggingScroll ? 0xFFFFD98A : 0xFF7C8794);
         }
 
         if (calculating) g.centeredText(Minecraft.getInstance().font,
@@ -287,7 +299,7 @@ class IncompatibleEnchantmentsScreen extends Screen {
         addRenderableWidget(Button.builder(
                 Component.translatable("gui.ok"),
                 b -> onClose()
-        ).bounds(midX - 40, midY + 10, 80, 20).build());
+        ).bounds(midX - 50, midY + 22, 100, 20).build());
     }
 
     @Override
@@ -295,8 +307,14 @@ class IncompatibleEnchantmentsScreen extends Screen {
         super.extractRenderState(g, mx, my, d);
         int midX = this.width / 2;
         int midY = this.height / 2;
-        g.fill(midX - 130, midY - 30, midX + 130, midY + 40, 0xDD000000);
-        g.centeredText(Minecraft.getInstance().font, this.title, midX, midY - 15, 0xFFFF5555);
+        g.fill(midX - 152, midY - 48, midX + 152, midY + 54, 0xE0080A0D);
+        g.fill(midX - 150, midY - 46, midX + 150, midY + 52, 0xFF252126);
+        g.fill(midX - 148, midY - 44, midX + 148, midY - 41, 0xFFC24B4B);
+        g.centeredText(Minecraft.getInstance().font, Component.literal("INCOMPATIBLE ENCHANTMENTS"),
+                midX, midY - 29, 0xFFFFD0D0);
+        g.centeredText(Minecraft.getInstance().font, this.title, midX, midY - 9, 0xFFFF7777);
+        g.centeredText(Minecraft.getInstance().font, Component.literal("Choose a compatible combination to continue."),
+                midX, midY + 5, 0xFFB8B8C0);
     }
 
     @Override
