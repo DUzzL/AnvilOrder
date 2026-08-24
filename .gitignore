@@ -1,7 +1,13 @@
 # Gradle
 build/
 .gradle/
-gradle-wrapper.jar
+bin/
+
+# Local Minecraft run data
+run/
+
+# Accidental local Java command output
+amp
 
 # IDE
 .idea/
