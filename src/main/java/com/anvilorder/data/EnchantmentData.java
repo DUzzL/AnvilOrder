@@ -100,8 +100,14 @@ public class EnchantmentData {
         addConflictGroup("depth_strider", "frost_walker");
         addConflictGroup("fortune", "silk_touch");
         addConflictGroup("infinity", "mending");
-        addConflictGroup("riptide", "channeling", "loyalty");
+        addConflictPair("riptide", "channeling");
+        addConflictPair("riptide", "loyalty");
         addConflictGroup("multishot", "piercing");
+    }
+
+    private static void addConflictPair(String first, String second) {
+        INCOMPATIBLE.computeIfAbsent(first, key -> new HashSet<>()).add(second);
+        INCOMPATIBLE.computeIfAbsent(second, key -> new HashSet<>()).add(first);
     }
 
     private static void addConflictGroup(String... enchants) {

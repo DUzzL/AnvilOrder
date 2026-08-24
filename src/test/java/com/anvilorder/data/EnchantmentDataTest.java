@@ -57,7 +57,8 @@ class EnchantmentDataTest {
         addExclusiveGroup(expected, "depth_strider", "frost_walker");
         addExclusiveGroup(expected, "fortune", "silk_touch");
         addExclusiveGroup(expected, "infinity", "mending");
-        addExclusiveGroup(expected, "riptide", "channeling", "loyalty");
+        addExclusivePair(expected, "riptide", "channeling");
+        addExclusivePair(expected, "riptide", "loyalty");
         addExclusiveGroup(expected, "multishot", "piercing");
 
         for (String enchantment : EnchantmentData.getAllEnchantPaths()) {
@@ -96,5 +97,10 @@ class EnchantmentDataTest {
                 if (!id.equals(other)) conflicts.add(other);
             }
         }
+    }
+
+    private static void addExclusivePair(Map<String, Set<String>> expected, String first, String second) {
+        expected.computeIfAbsent(first, ignored -> new HashSet<>()).add(second);
+        expected.computeIfAbsent(second, ignored -> new HashSet<>()).add(first);
     }
 }
