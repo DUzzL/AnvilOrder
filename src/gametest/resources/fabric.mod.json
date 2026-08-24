@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "anvilorder-tests",
+  "version": "1.0.0",
+  "name": "AnvilOrder Client Tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "com.anvilorder.client.screen.EnchantmentSelectScreenClientTest"
+    ]
+  },
+  "depends": {
+    "anvilorder": "*",
+    "fabric-client-gametest-api-v1": "*",
+    "minecraft": ">=26.1 <26.2"
+  }
+}

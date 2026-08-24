@@ -14,8 +14,9 @@ import java.util.*;
 /**
  * Bridges vanilla Minecraft enchantment data to the solver.
  *
- * Weights and incompatibilities are hardcoded because vanilla doesn't expose
- * these programmatically. The data mirrors iamcal/enchant-order's data.js.
+ * The known vanilla IDs mirror iamcal/enchant-order's data.js. Runtime costs,
+ * maximum levels, item support and compatibility come from Minecraft's
+ * data-driven enchantment registry whenever holders are available.
  *
  * MC 26.1+ uses Mojang class names: ResourceKey<Enchantment> instead of
  * RegistryKey, BuiltInRegistries instead of Registries, Holder instead of
@@ -31,7 +32,7 @@ public class EnchantmentData {
     private static final Map<String, Set<String>> ITEM_ENCHANTS = new HashMap<>();
 
     /** Maps enchantment ID string to its ResourceKey — lazily initialized */
-    private static Map<String, ResourceKey<Enchantment>> ENCHANT_KEYS;
+    private static Map<String, ResourceKey<Enchantment>> ENCHANT_KEYS = new HashMap<>();
     private static boolean keysInitialized = false;
 
     static {
@@ -77,7 +78,7 @@ public class EnchantmentData {
         WEIGHTS.put("punch", 2);
         WEIGHTS.put("respiration", 2);
         WEIGHTS.put("riptide", 2);
-        WEIGHTS.put("sweeping", 2);
+        WEIGHTS.put("sweeping_edge", 2);
         WEIGHTS.put("breach", 2);
         WEIGHTS.put("wind_burst", 2);
 
@@ -94,37 +95,28 @@ public class EnchantmentData {
 
     // ---- Incompatibilities ----
     private static void initIncompatibilities() {
-        addConflict("protection", "blast_protection", "fire_protection", "projectile_protection");
-        addConflict("blast_protection", "fire_protection", "protection", "projectile_protection");
-        addConflict("fire_protection", "blast_protection", "protection", "projectile_protection");
-        addConflict("projectile_protection", "protection", "blast_protection", "fire_protection");
-
-        addConflict("sharpness", "smite", "bane_of_arthropods");
-        addConflict("smite", "sharpness", "bane_of_arthropods", "density", "breach");
-        addConflict("bane_of_arthropods", "smite", "sharpness", "density", "breach");
-
-        addConflict("depth_strider", "frost_walker");
-        addConflict("frost_walker", "depth_strider");
-
-        addConflict("fortune", "silk_touch");
-        addConflict("silk_touch", "fortune");
-
-        addConflict("infinity", "mending");
-        addConflict("mending", "infinity");
-
-        addConflict("channeling", "riptide");
-        addConflict("riptide", "channeling", "loyalty");
-        addConflict("loyalty", "riptide");
-
-        addConflict("multishot", "piercing");
-        addConflict("piercing", "multishot");
-
-        addConflict("density", "breach", "smite", "bane_of_arthropods");
-        addConflict("breach", "density", "smite", "bane_of_arthropods");
+        addConflictGroup("protection", "blast_protection", "fire_protection", "projectile_protection");
+        addConflictGroup("sharpness", "smite", "bane_of_arthropods", "impaling", "density", "breach");
+        addConflictGroup("depth_strider", "frost_walker");
+        addConflictGroup("fortune", "silk_touch");
+        addConflictGroup("infinity", "mending");
+        addConflictPair("riptide", "channeling");
+        addConflictPair("riptide", "loyalty");
+        addConflictGroup("multishot", "piercing");
     }
 
-    private static void addConflict(String enchant, String... conflicts) {
-        INCOMPATIBLE.computeIfAbsent(enchant, k -> new HashSet<>()).addAll(Arrays.asList(conflicts));
+    private static void addConflictPair(String first, String second) {
+        INCOMPATIBLE.computeIfAbsent(first, key -> new HashSet<>()).add(second);
+        INCOMPATIBLE.computeIfAbsent(second, key -> new HashSet<>()).add(first);
+    }
+
+    private static void addConflictGroup(String... enchants) {
+        for (String enchant : enchants) {
+            Set<String> conflicts = INCOMPATIBLE.computeIfAbsent(enchant, key -> new HashSet<>());
+            for (String other : enchants) {
+                if (!enchant.equals(other)) conflicts.add(other);
+            }
+        }
     }
 
     // ---- Item-to-enchantment mapping ----
@@ -134,22 +126,24 @@ public class EnchantmentData {
                 "aqua_affinity", "respiration", "thorns", "unbreaking", "mending",
                 "binding_curse", "vanishing_curse");
         addItemEnchants("chestplate", "protection", "blast_protection", "fire_protection", "projectile_protection",
-                "thorns", "unbreaking", "mending", "vanishing_curse");
+                "thorns", "unbreaking", "mending", "binding_curse", "vanishing_curse");
         addItemEnchants("leggings", "protection", "blast_protection", "fire_protection", "projectile_protection",
-                "thorns", "unbreaking", "mending", "swift_sneak", "vanishing_curse");
+                "thorns", "unbreaking", "mending", "swift_sneak", "binding_curse", "vanishing_curse");
         addItemEnchants("boots", "protection", "blast_protection", "fire_protection", "projectile_protection",
                 "feather_falling", "depth_strider", "frost_walker", "thorns", "unbreaking",
-                "mending", "soul_speed", "vanishing_curse");
+                "mending", "soul_speed", "binding_curse", "vanishing_curse");
         addItemEnchants("turtle_helmet", "protection", "blast_protection", "fire_protection", "projectile_protection",
                 "aqua_affinity", "respiration", "thorns", "unbreaking", "mending",
-                "vanishing_curse");
+                "binding_curse", "vanishing_curse");
 
         addItemEnchants("sword", "sharpness", "smite", "bane_of_arthropods", "knockback",
-                "fire_aspect", "looting", "sweeping", "unbreaking", "mending", "vanishing_curse");
+                "fire_aspect", "looting", "sweeping_edge", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("axe", "sharpness", "smite", "bane_of_arthropods", "efficiency",
                 "fortune", "silk_touch", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("mace", "density", "breach", "smite", "bane_of_arthropods",
                 "fire_aspect", "wind_burst", "unbreaking", "mending", "vanishing_curse");
+        addItemEnchants("spear", "sharpness", "smite", "bane_of_arthropods", "knockback",
+                "fire_aspect", "looting", "lunge", "unbreaking", "mending", "vanishing_curse");
 
         addItemEnchants("pickaxe", "efficiency", "fortune", "silk_touch", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("shovel", "efficiency", "fortune", "silk_touch", "unbreaking", "mending", "vanishing_curse");
@@ -163,12 +157,18 @@ public class EnchantmentData {
         addItemEnchants("fishing_rod", "luck_of_the_sea", "lure", "unbreaking", "mending", "vanishing_curse");
 
         addItemEnchants("shears", "efficiency", "unbreaking", "mending", "vanishing_curse");
-        addItemEnchants("shield", "unbreaking", "mending");
-        addItemEnchants("elytra", "unbreaking", "mending", "vanishing_curse");
+        addItemEnchants("shield", "unbreaking", "mending", "vanishing_curse");
+        addItemEnchants("elytra", "unbreaking", "mending", "binding_curse", "vanishing_curse");
         addItemEnchants("brush", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("flint_and_steel", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("carrot_on_a_stick", "unbreaking", "mending", "vanishing_curse");
         addItemEnchants("warped_fungus_on_a_stick", "unbreaking", "mending", "vanishing_curse");
+        addItemEnchants("compass", "vanishing_curse");
+        addItemEnchants("carved_pumpkin", "binding_curse", "vanishing_curse");
+        for (String head : List.of("player_head", "creeper_head", "zombie_head", "skeleton_skull",
+                "wither_skeleton_skull", "dragon_head", "piglin_head")) {
+            addItemEnchants(head, "binding_curse", "vanishing_curse");
+        }
 
         // Allow books to have any enchantment
         addItemEnchants("book", WEIGHTS.keySet().toArray(new String[0]));
@@ -205,6 +205,11 @@ public class EnchantmentData {
         return WEIGHTS.getOrDefault(enchantPath, 2);
     }
 
+    /** Get the enchanted-book anvil multiplier used by the reference solver. */
+    public static int getWeight(Holder<Enchantment> enchant) {
+        return Math.max(1, enchant.value().getAnvilCost() / 2);
+    }
+
     /** Get the maximum level for an enchantment. */
     public static int getMaxLevel(Holder<Enchantment> enchant) {
         return enchant.value().getMaxLevel();
@@ -212,7 +217,7 @@ public class EnchantmentData {
 
     /** Get the names of enchantments incompatible with the given one. */
     public static Set<String> getIncompatible(String enchantPath) {
-        return INCOMPATIBLE.getOrDefault(enchantPath, Set.of());
+        return Set.copyOf(INCOMPATIBLE.getOrDefault(enchantPath, Set.of()));
     }
 
     /** Check if two enchantment paths are compatible. */
@@ -225,13 +230,13 @@ public class EnchantmentData {
     public static Set<String> getEnchantmentsForItem(String itemName) {
         // Try exact match first, then strip material prefixes (e.g. diamond_pickaxe -> pickaxe)
         Set<String> result = ITEM_ENCHANTS.get(itemName);
-        if (result != null) return result;
+        if (result != null) return Set.copyOf(result);
         // Strip known material prefix (e.g. diamond_, iron_, golden_, netherite_, stone_, wooden_, leather_, chainmail_)
         int underscoreIdx = itemName.indexOf('_');
         if (underscoreIdx > 0) {
             String baseName = itemName.substring(underscoreIdx + 1);
             result = ITEM_ENCHANTS.get(baseName);
-            if (result != null) return result;
+            if (result != null) return Set.copyOf(result);
         }
         return Set.of();
     }
@@ -252,12 +257,12 @@ public class EnchantmentData {
         if (mc == null || mc.getConnection() == null) return Optional.empty();
         Registry<Enchantment> enchantRegistry = mc.getConnection().registryAccess()
                 .lookupOrThrow(Registries.ENCHANTMENT);
-        return enchantRegistry.get(key).map(Holder.class::cast);
+        return enchantRegistry.get(key).map(reference -> (Holder<Enchantment>) reference);
     }
 
     /** Get all known enchantment paths with weights. */
     public static Set<String> getAllEnchantPaths() {
-        return WEIGHTS.keySet();
+        return Set.copyOf(WEIGHTS.keySet());
     }
 
     /** Determine the simple item name from an Item. */

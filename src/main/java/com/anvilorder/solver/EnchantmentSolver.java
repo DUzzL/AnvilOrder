@@ -130,8 +130,12 @@ public class EnchantmentSolver {
         List<CombineStep> steps = extractInstructions(node, weightMap, isBook, nm);
         if (steps.isEmpty()) return SolverResult.empty();
         int tl = 0;
-        for (CombineStep s : steps) tl += s.levelCost;
-        return new SolverResult(steps, tl, 0, 0, true);
+        int tx = 0;
+        for (CombineStep s : steps) {
+            tl += s.levelCost;
+            tx += s.xpCost;
+        }
+        return new SolverResult(steps, tl, tx, 0, true);
     }
 
     // ---- Memoization cache ----
@@ -168,14 +172,14 @@ public class EnchantmentSolver {
 
         if (n == 1) {
             // Reference case 1: return {work: item}
-            result = new HashMap<>();
+            result = new TreeMap<>();
             VirtualItem item = items.get(0);
             result.put(item.work, item);
         } else if (n == 2) {
             // Reference: calls cheapestItemFromItems2(left, right)
-            result = new HashMap<>();
+            result = new TreeMap<>();
             VirtualItem cheapest = cheapestItemFromItems2(items.get(0), items.get(1));
-            result.put(cheapest.work, cheapest);
+            if (cheapest != null) result.put(cheapest.work, cheapest);
         } else {
             // Reference default: cheapestItemsFromListN(items, floor(n/2))
             result = cheapestItemsFromListN(items, n / 2);
@@ -217,7 +221,7 @@ public class EnchantmentSolver {
      * Matches reference cheapestItemsFromListN.
      */
     private static Map<Integer, VirtualItem> cheapestItemsFromListN(List<VirtualItem> items, int maxSubcount) {
-        Map<Integer, VirtualItem> cheapestByWork = new HashMap<>();
+        Map<Integer, VirtualItem> cheapestByWork = new TreeMap<>();
         List<Integer> cheapestPriorWorks = new ArrayList<>();
 
         for (int subcount = 1; subcount <= maxSubcount; subcount++) {
@@ -254,21 +258,13 @@ public class EnchantmentSolver {
      */
     private static Map<Integer, VirtualItem> cheapestItemsFromTwoDictionaries(
             Map<Integer, VirtualItem> left, Map<Integer, VirtualItem> right) {
-        Map<Integer, VirtualItem> cheapestByWork = new HashMap<>();
+        Map<Integer, VirtualItem> cheapestByWork = new TreeMap<>();
         List<Integer> cheapestPriorWorks = new ArrayList<>();
 
         for (VirtualItem leftItem : left.values()) {
             for (VirtualItem rightItem : right.values()) {
-                Map<Integer, VirtualItem> newW2I;
-                try {
-                    // Reference: new_work2item = cheapestItemsFromList([left_item, right_item])
-                    List<VirtualItem> pair = List.of(leftItem, rightItem);
-                    newW2I = cheapestItemsFromList(pair);
-                } catch (Exception e) {
-                    continue;
-                }
-
-                if (newW2I == null) continue;
+                // Reference: new_work2item = cheapestItemsFromList([left_item, right_item])
+                Map<Integer, VirtualItem> newW2I = cheapestItemsFromList(List.of(leftItem, rightItem));
 
                 for (Map.Entry<Integer, VirtualItem> entry : newW2I.entrySet()) {
                     int work = entry.getKey();
@@ -294,7 +290,7 @@ public class EnchantmentSolver {
      * Returns a map. When works differ: keeps both. When works same: picks one.
      */
     private static Map<Integer, VirtualItem> compareCheapest(VirtualItem a, VirtualItem b) {
-        Map<Integer, VirtualItem> result = new LinkedHashMap<>();
+        Map<Integer, VirtualItem> result = new TreeMap<>();
         if (a.work == b.work) {
             if (a.value == b.value) {
                 result.put(a.work, a.totalXp <= b.totalXp ? a : b);
@@ -316,7 +312,9 @@ public class EnchantmentSolver {
         Map<Integer, VirtualItem> result = new LinkedHashMap<>();
         int cheapestValue = Integer.MAX_VALUE;
 
-        for (Map.Entry<Integer, VirtualItem> entry : workToItem.entrySet()) {
+        List<Map.Entry<Integer, VirtualItem>> entries = new ArrayList<>(workToItem.entrySet());
+        entries.sort(Map.Entry.comparingByKey());
+        for (Map.Entry<Integer, VirtualItem> entry : entries) {
             int work = entry.getKey();
             VirtualItem item = entry.getValue();
             if (item.value < cheapestValue) {

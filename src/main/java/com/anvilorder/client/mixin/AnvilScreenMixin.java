@@ -14,8 +14,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -124,7 +123,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> {
     private void updateButtonState() {
         if (this.planButton == null) return;
         ItemStack inputStack = this.menu.getSlot(0).getItem();
-        boolean enabled = !inputStack.isEmpty() && inputStack.isEnchantable();
+        boolean enabled = !inputStack.isEmpty() && EnchantmentHelper.canStoreEnchantments(inputStack);
         this.planButton.active = enabled;
         if (enabled) {
             this.planButton.setTooltip(Tooltip.create(Component.translatable("button.anvilorder.tooltip")));
