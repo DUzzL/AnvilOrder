@@ -1,5 +1,6 @@
 package com.anvilorder.client.screen;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.anvilorder.solver.CombineStep;
 import com.anvilorder.solver.SolverResult;
 import net.minecraft.ChatFormatting;
@@ -220,7 +221,7 @@ public class AnvilGuidePanel {
     }
 
     public boolean mouseClicked(double mx, double my, int btn) {
-        if (!isVisible() || btn != 0) return false;
+        if (!isVisible() || btn != InputConstants.MOUSE_BUTTON_LEFT) return false;
         int pw = Math.max(PANEL_WIDTH, this.width);
         int ct = contentTop(), cb = contentBottom();
         int vh = visibleH(), tc = totalContentH();

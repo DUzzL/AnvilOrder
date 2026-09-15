@@ -4,6 +4,11 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.anvilorder.solver.CombineStep;
+import com.anvilorder.solver.SolverResult;
+import net.minecraft.client.gui.screens.inventory.AnvilScreen;
+import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -19,6 +24,37 @@ public class EnchantmentSelectScreenClientTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext ignored = context.worldBuilder().create()) {
             context.getInput().resizeWindow(854, 480);
+            context.runOnClient(client -> {
+                // Construct and display the actual mixin target to validate its injections.
+                client.setScreenAndShow(new AnvilScreen(
+                        new AnvilMenu(1, client.player.getInventory()),
+                        client.player.getInventory(), Component.literal("Anvil")));
+            });
+            context.waitForScreen(AnvilScreen.class);
+            context.waitTicks(2);
+            context.runOnClient(client -> {
+                AnvilGuidePanel panel = new AnvilGuidePanel();
+                panel.width = 200;
+                panel.height = 100;
+                panel.setResult(new SolverResult(java.util.Collections.nCopies(10,
+                        new CombineStep("Sword", "Book", 1, 7, 1)), 10, 70, 10, true));
+                // Clicking below the vertical thumb must page down with SDL's left button.
+                if (panel.mouseClicked(194, 70, InputConstants.MOUSE_BUTTON_RIGHT)) {
+                    throw new AssertionError("Right click must not activate the scrollbar");
+                }
+                if (!panel.mouseClicked(194, 70, InputConstants.MOUSE_BUTTON_LEFT)) {
+                    throw new AssertionError("Left click must activate the scrollbar");
+                }
+                try {
+                    Field scroll = AnvilGuidePanel.class.getDeclaredField("scrollY");
+                    scroll.setAccessible(true);
+                    if (scroll.getDouble(panel) <= 0) {
+                        throw new AssertionError("Left click did not scroll the guide panel");
+                    }
+                } catch (ReflectiveOperationException exception) {
+                    throw new AssertionError(exception);
+                }
+            });
             context.setScreen(() -> new EnchantmentSelectScreen(
                     Component.translatable("screen.anvilorder.enchant_select"),
                     new ItemStack(Items.DIAMOND_SWORD),

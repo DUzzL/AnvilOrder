@@ -28,7 +28,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AnvilScreen.class)
 public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> {
 
-    // AnvilScreen in MC 26.2 takes 3 args; ItemCombinerScreen wants 4.
+    // AnvilScreen in MC 26.3 takes 3 args; ItemCombinerScreen wants 4.
     // Supply the well-known anvil background texture identifier.
     private static final Identifier ANVIL_LOCATION = Identifier.withDefaultNamespace("textures/gui/container/anvil.png");
 
